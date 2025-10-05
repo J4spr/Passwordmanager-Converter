@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 keepass_to_proton.py
 Convert a KeePassXC-exported CSV (with the headers you provided) into a Proton Pass CSV:
@@ -20,7 +19,6 @@ import os
 import sys
 import re
 
-# Exact Proton header order you gave
 PROTON_HEADERS = [
     "name",
     "url",
@@ -32,7 +30,6 @@ PROTON_HEADERS = [
     "vault",
 ]
 
-# Expected KeePass headers (case-insensitive match)
 EXPECTED_KEEPASS_HEADERS = [
     "Group",
     "Title",
@@ -50,7 +47,6 @@ EMAIL_RE = re.compile(r"^[^@]+@[^@]+\.[^@]+$")
 
 
 def detect_encoding_open(path):
-    # handle BOM if present
     return open(path, newline="", encoding="utf-8-sig")
 
 
@@ -65,7 +61,6 @@ def read_headers(path):
 
 
 def find_header(name, headers):
-    """Case-insensitive lookup; returns exact header name from headers or None."""
     lname = name.lower()
     for h in headers:
         if h.strip().lower() == lname:
@@ -95,7 +90,6 @@ def convert(source_path, out_path, force=False):
         print("No headers detected in source CSV. Is it empty?")
         sys.exit(2)
 
-    # Map keepass headers to actual names present in file (case-insensitive)
     mapping = {
         "Group": find_header("Group", source_headers),
         "Title": find_header("Title", source_headers),
@@ -112,7 +106,6 @@ def convert(source_path, out_path, force=False):
     for k, v in mapping.items():
         print(f"  {k:8} -> {v or '(not found)'}")
 
-    # If essential fields missing, warn but continue (user can inspect output)
     if not mapping["Title"] and not mapping["Username"]:
         print(
             "\nWarning: neither Title nor Username found in source headers. Output will miss 'name' and 'username'."
@@ -122,7 +115,6 @@ def convert(source_path, out_path, force=False):
             "\nWarning: Password column not found. Output will have empty password fields!"
         )
 
-    # Read full rows and convert
     with detect_encoding_open(source_path) as sf, open(
         out_path, "w", newline="", encoding="utf-8"
     ) as of:
@@ -135,7 +127,6 @@ def convert(source_path, out_path, force=False):
             row_count += 1
             out = {h: "" for h in PROTON_HEADERS}
 
-            # name <- Title (fallback: Username if Title missing)
             if mapping["Title"]:
                 out["name"] = row.get(mapping["Title"], "").strip()
             else:
@@ -145,30 +136,23 @@ def convert(source_path, out_path, force=False):
                     else ""
                 )
 
-            # url
             if mapping["URL"]:
                 out["url"] = row.get(mapping["URL"], "").strip()
 
-            # username
             if mapping["Username"]:
                 out["username"] = row.get(mapping["Username"], "").strip()
 
-            # email: if username looks like an email, use it; otherwise blank
             out["email"] = guess_email_from_username(out["username"])
 
-            # password
             if mapping["Password"]:
                 out["password"] = row.get(mapping["Password"], "").strip()
 
-            # note
             if mapping["Notes"]:
                 out["note"] = row.get(mapping["Notes"], "").strip()
 
-            # totp
             if mapping["TOTP"]:
                 out["totp"] = row.get(mapping["TOTP"], "").strip()
 
-            # vault <- Group
             if mapping["Group"]:
                 out["vault"] = row.get(mapping["Group"], "").strip()
 
@@ -179,7 +163,6 @@ def convert(source_path, out_path, force=False):
 
 
 def preview_sample(source_path, sample_count=5):
-    # show a few converted sample rows for quick sanity check
     with detect_encoding_open(source_path) as sf:
         reader = csv.DictReader(sf)
         sample = []
@@ -195,10 +178,8 @@ def preview_sample(source_path, sample_count=5):
     for i, r in enumerate(sample, start=1):
         print(f"\nRow #{i}:")
         for key in EXPECTED_KEEPASS_HEADERS:
-            # show only if present in this file (case-insensitive)
             k = next((h for h in r.keys() if h.strip().lower() == key.lower()), None)
             if k:
-                # mask sensitive-looking values for preview: show length only for password/totp
                 val = r.get(k, "")
                 if key.lower() in ("password", "totp"):
                     print(f"  {k}: <{len(val)} chars>")
@@ -231,4 +212,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\nAborted by user.")
+        sys.exit(130)
